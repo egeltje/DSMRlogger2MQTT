@@ -1,6 +1,11 @@
 #ifndef _PARSER_H_
 #define	_PARSER_H_
 
+typedef struct ObisValue_t {
+    char        szValue[1024];
+    char        szUnit[4];
+} ObisValue;
+
 typedef struct ObisLine_t {
     char        szLine[2048];
     uint16_t    iLineStart;

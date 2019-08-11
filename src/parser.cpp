@@ -62,9 +62,6 @@ void fnvParseObisLine(ObisLine* pstObisLine) {
             pstObisLine->iValueLength = _iPos - pstObisLine->iValueStart; // [15 - 4 = 11]
 
             _iPos = pstObisLine->iValueStart;
-            while ((_iPos <= pstObisLine->iValueStart + pstObisLine->iValueLength) && (pstObisLine->szLine[_iPos] != '*')) {
-                _iPos++;
-            }
             if (_iPos > pstObisLine->iValueStart + pstObisLine->iValueLength) {
                 // No unit in the value
             } else {
@@ -77,29 +74,85 @@ void fnvParseObisLine(ObisLine* pstObisLine) {
     }
 }
 
-char* fnpszParseObisSingleValue2JSON(ObisLine* pstObisLine, char* pszDescription, char* pszType) {
-    static char _szMessage[128];
-    char _szValue[pstObisLine->iValueLength + 1];
+char* fnpszParseObisSingleValue2JSON(char* _pszObisLine, uint16_t _iObisLineLength) {
+    uint16_t    _iPos = 0;
+    char        _szObisID[12] = "";
+    uint16_t     _iIDStart = 0;
+    uint16_t     _iIDLength = 0;
+    char        _szObisValue[256] = "";
+    uint16_t     _iValueStart = 0;
+    uint16_t     _iValueLength = 0;
+    char        _szObisUnit[4] = "";
+    uint16_t     _iUnitStart = 0;
+    uint16_t     _iUnitLength = 0;
+    static char _szReturnMessage[12 + 256 + 4 + 16] = ""; // ID + Value + Unit + JSON characters
 
-    strncpy(_szValue, pstObisLine->szLine + pstObisLine->iValueStart, pstObisLine->iValueLength);
-    strcat(_szValue, "\0");
-
-    switch (pszType[0]) {
-        case 'F':
-            sprintf(_szMessage, "{\"%s\":%f}", pszDescription, strtof(_szValue, NULL));
-            break;
-        case 'S':
-            sprintf(_szMessage, "{\"%s\":\"%s\"}", pszDescription, _szValue);
-            break;
-        case 'T':
-            sprintf(_szMessage, "{\"%s\":\"%s\"}", pszDescription, fnpszConvertObisTimestamp(_szValue));
-            break;
-        default:
-            sprintf(_szMessage, "{\"error\":\"unable to parse value %s with type %s\"}", _szValue, pszType);
-            break;
+    // parse ID
+    if (_pszObisLine[0] == '(') {
+        // We are parsing part of a multi-line, ID is enclosed by brackets.
+        // We need to strip these.
+        _iIDStart = 1;
+        while ((_iPos <= _iObisLineLength) && (_pszObisLine[_iPos] != ')')) {
+            _iPos++;
+        }
+        _iIDLength = (_iPos - 1) - _iIDStart;
+        while ((_iPos <= _iObisLineLength) && (_pszObisLine[_iPos] != '(')) {
+            _iPos++; // move to the next ( character
+        }
+    } else {
+        // We are parsing a stand-alone single-line. obisID is not enclosed.
+        _iIDStart = 0;
+        while ((_iPos <= _iObisLineLength) && (_szObisLine[_iPos] != '(')) {
+            _iPos++;
+        }
+        _iIDLength = (_iPos - 1) - _iIDStart;
+    }
+    if (_iPos <= _iObisLineLength) {
+        strncpy(_szObisID, _pszObisLine[_iIDStart], _iIDLength);
+    } else {
+        // Error
+        _iIDLength = 0;
     }
 
-    return _szMessage;
+    // parse value / unit, _iPos is at value bracket (
+    _iPos++; // ignore the bracket
+    _iValueStart = _iPos;
+
+    while ((_iPos <= _iObisLineLength) && (_pszObisLine[_iPos] != '*') && (_pszObisLine[_iPos] != ')')) {
+        _iPos++;
+    }
+    if (_iPos <= _iObisLineLength) {
+        _iValueLength = (_iPos - 1) - _iValueStart;
+        strncpy(_szObisValue, _pszObisLine[_iValueStart], _iValueLength);
+
+        if (_pszObisLine[_iPos] == '*') { // unit found
+            // parse unit, _iPos is at unit asterisk *
+            _iPos++; // ignore the asterisk
+            _iUnitStart = _iPos;
+
+            while ((_iPos <= _iObisLineLength) && (_pszObisLine[_iPos] != ')')) {
+                _iPos++;
+            }
+            if (_iPos <= _iObisLineLength) {
+                _iUnitLength = (_iPos - 1) - _iUnitStart;
+                strncpy(_szObisUnit, _pszObisLine[_iUnitStart], _iUnitLength);
+            } else {
+                // Error
+                _iUnitLength = 0;
+            }
+        }
+    } else {
+        // Error
+        _iValueLength = 0;
+    }
+    
+    if ((_iIDLength > 0) && (_iValueLength > 0)) {
+        sprintf(_szReturnMessage, "{\"%s\":{\"value\":\"%s\",\"unit\":\"%s\"}", _szObisID, _szObisValue, _szObisUnit);
+    } else {
+        // Error
+    }
+
+    return _szReturnMessage;
 }
 
 char* fnpszParseObisTextValue2JSON(ObisLine* pstObisLine, char* pszDescription){
@@ -117,8 +170,10 @@ char* fnpszParseObisTextValue2JSON(ObisLine* pstObisLine, char* pszDescription){
 }
 
 char* fnpszParseObisMultiValue2JSON(ObisLine* pstObisLine, char* pszDescription) {
+    uint16_t    _iPos = 0;
     static char _sMessage[1024];
 // (2)(0-0:96.7.19)(101208152415W)(0000000240*s)(101208151004W)(0000000301*s)
+
 // Get first number 
 // itterate over every number
 //      extract timestamp
