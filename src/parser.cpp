@@ -41,37 +41,10 @@ char* fnpszConvertObisTimestamp(char* szObisTimestamp) {
 void fnvParseObisLine(ObisLine* pstObisLine) {
     uint16_t    _iPos = 0;
     pstObisLine->bValid = false;
-
-    while (_iPos <= pstObisLine->iLineLength && (pstObisLine->szLine[_iPos] != '(') ) {
-        _iPos++;
-    }
-    if (_iPos > pstObisLine->iLineLength) {
-        // error, value did not start with a (
-    } else {
-        pstObisLine->iIDStart = 0;
-        pstObisLine->iIDLength = _iPos - pstObisLine->iIDStart;     // [3 - 0 = 3]
-        // insert OBIS ID format checks here
-        pstObisLine->iValueStart = _iPos + 1;   // [3 + 1 = 4]
-
-        while ((_iPos <= pstObisLine->iLineLength) && (pstObisLine->szLine[_iPos] != ')')) {
-            _iPos++;
-        }
-        if (_iPos > pstObisLine->iLineLength) {
-            // error, value did not end with a )
-        } else {
-            pstObisLine->iValueLength = _iPos - pstObisLine->iValueStart; // [15 - 4 = 11]
-
-            _iPos = pstObisLine->iValueStart;
-            if (_iPos > pstObisLine->iValueStart + pstObisLine->iValueLength) {
-                // No unit in the value
-            } else {
-                pstObisLine->iUnitStart = _iPos + 1;    // [12]
-                pstObisLine->iUnitLength = pstObisLine->iValueStart + pstObisLine->iValueLength - _iPos - 1; // [4 + 11 - 11 - 1 = 3]
-                pstObisLine->iValueLength = pstObisLine->iValueLength - pstObisLine->iUnitLength - 1; // 11 - 3 - 1 = 7
-            }
-            pstObisLine->bValid = true;
-        }
-    }
+    // extract OBIS ID
+    // if multi-line -> multiline
+    // if mbus-line -> mbusline
+    // all else -> singleline
 }
 
 char* fnpszParseObisSingleValue2JSON(char* _pszObisLine, uint16_t _iObisLineLength) {
@@ -85,7 +58,7 @@ char* fnpszParseObisSingleValue2JSON(char* _pszObisLine, uint16_t _iObisLineLeng
     char        _szObisUnit[4] = "";
     uint16_t     _iUnitStart = 0;
     uint16_t     _iUnitLength = 0;
-    static char _szReturnMessage[12 + 256 + 4 + 16] = ""; // ID + Value + Unit + JSON characters
+    static char _szReturnMessage[12 + 256 + 4 + 16 + 1] = ""; // ID + Value + Unit + JSON characters + \0
 
     // parse ID
     if (_pszObisLine[0] == '(') {
@@ -173,7 +146,7 @@ char* fnpszParseObisMultiValue2JSON(ObisLine* pstObisLine, char* pszDescription)
     uint16_t    _iPos = 0;
     static char _sMessage[1024];
 // (2)(0-0:96.7.19)(101208152415W)(0000000240*s)(101208151004W)(0000000301*s)
-
+// Get OBIS ID
 // Get first number 
 // itterate over every number
 //      extract timestamp
